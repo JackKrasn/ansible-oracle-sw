@@ -1,0 +1,75 @@
+# {{ ansible_managed }}
+ORALIST{{ short_version }} =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = {{ ansible_fqdn }})(PORT = {{ lis_port }}))
+    )
+  )
+
+ORALIST{{ short_version }}N =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = {{ ansible_fqdn }})(PORT = {{ lis_port_res }}))
+    )
+  )
+
+VALID_NODE_CHECKING_REGISTRATION_ORALIST{{ short_version }}=ON
+VALID_NODE_CHECKING_REGISTRATION_ORALIST{{ short_version  }}N=ON
+
+ADR_BASE_EXTLIST{{ short_version }} = /u/tools
+ADR_BASE_ORALIST{{ short_version }} = {{ oracle_base }}
+ADR_BASE_ORALIST{{ short_version }}N = {{ oracle_base }}
+DIAG_ADR_ENABLED_EXTLIST{{ short_version }} = OFF
+DIAG_ADR_ENABLED_ORALIST = OFF
+LOGGING_EXTLIST{{ short_version }} = OFF
+LOGGING_ORALIST = OFF
+LOGGING_ORALIST{{ short_version }} = OFF 
+
+EXTLIST{{ short_version }} =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC{{ short_version }}))
+    )
+  )
+
+SID_LIST_EXTLIST{{ short_version }} =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = PLSExtProc{{ short_version }})
+      (ORACLE_HOME = {{ oracle_home }})
+      (PROGRAM = extproc)
+      (ENVS = "EXTPROC_DLLS=ANY,LD_LIBRARY_PATH=/u/tools/xml/lib:{{ oracle_home }}/lib")
+    )
+  )
+
+MGW{{ short_version }} =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS_LIST =
+        (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROCMGW{{ short_version }}))
+      )
+    )
+  )
+l
+SID_LIST_MGW{{ short_version }} =
+  (SID_LIST =
+    (SID_DESC =
+      (SID_NAME = mgwextproc{{ short_version }})
+      (ENVS = "EXTPROC_DLLS=ANY,LD_LIBRARY_PATH={{ oracle_home }}/jdk/jre/lib/amd64:{{ oracle_home }}/jdk/jre/lib/amd64/server:{{ oracle_home }}/lib")
+      (ORACLE_HOME = {{ oracle_home }})
+      (PROGRAM = extproc)
+    )
+  )
+
+{% if db_for_static %}
+SID_LIST_ORALIST{{ short_version }}N =
+  (SID_LIST=
+{% for sid in db_for_static %}
+    (SID_DESC =
+        (GLOBAL_DBNAME={{ sid }}_DGMGRL)
+        (SID_NAME={{ sid }})
+        (ORACLE_HOME={{ oracle_home }})
+    )
+{% endfor %}
+  )
+{% endif %}

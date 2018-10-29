@@ -1,0 +1,10 @@
+---
+- name: DB SW management
+  hosts: ~^db(_88|_dmz|_test|_techno|_sandbox)?$|^db_edu$
+  remote_user: oracle
+  roles:
+    - { role: orasw-install, tags: orasw-install }
+    - { role: oratab       , tags: oratab        }
+    - { role: sqlnet       , tags: sqlnet        }
+    - { role: psu-apply    , tags: psu-apply     }
+    - { role: dbca_templates, tags: dbca_templates }

@@ -1,0 +1,28 @@
+---
+- name: Configure ldap.ora for {{ oracle_version }} {{ oracle_home }}
+  template:
+    src: ldap.ora.j2
+    dest: "{{ oracle_home }}/network/admin/ldap.ora"
+    backup: yes
+    force: yes
+
+- name: Configure listener.ora for {{ oracle_version }} {{ oracle_home }}
+  template:
+    src: listener.ora.j2
+    dest: "{{ oracle_home }}/network/admin/listener.ora"
+    backup: yes
+    force: yes
+
+- name: Configure tnsnames.ora for {{ oracle_version }} {{ oracle_home }}
+  template:
+    src: tnsnames.ora.j2
+    dest: "{{ oracle_home }}/network/admin/tnsnames.ora"
+    backup: yes
+    force: yes
+
+- name: Configure sqlnet.ora for {{ oracle_version }} {{ oracle_home }}
+  template:
+    src: sqlnet.ora.j2
+    dest: "{{ oracle_home }}/network/admin/sqlnet.ora"
+    backup: yes
+    force: yes

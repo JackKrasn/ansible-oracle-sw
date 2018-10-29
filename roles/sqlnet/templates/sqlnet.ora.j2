@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+   
+NAMES.DIRECTORY_PATH = (TNSNAMES, LDAP, EZCONNECT)
+
+ADR_BASE = /u/app/oracle
+
+#Workarround for BUG:12360281 - LOTS OF TNS-12599 ERRORS IN ALERT LOG WHEN CONNECTING TO DB FROM GRID CONTROL
+
+SQLNET.ENCRYPTION_TYPES_SERVER = (3DES168)
+
+{% include inventory_hostname + '/sqlnet.ora.ext.' + short_version  + '.j2' ignore missing %}

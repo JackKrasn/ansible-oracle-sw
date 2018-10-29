@@ -1,0 +1,17 @@
+---
+- name: Limit homes seeing list apply_only_versions, apply_only_homepaths
+  set_fact:
+    homes_overide: "{{ homes_overide | default({}) | combine({item.1: homes[item.1] }, recursive=True ) }}"
+  when: homes[item.1]['version'] == item.0
+  with_nested:
+    - "{{ apply_only_versions }}"
+    - "{{ homes }}"
+    
+- set_fact:
+    homes_overide: "{{ homes_overide | default({}) | combine({item: homes[item]}, recursive=True ) }}"
+  with_items:
+    - "{{ apply_only_homepaths }}"
+
+- set_fact: homes="{{ homes_overide }}"
+  when: homes_overide is defined
+

@@ -1,0 +1,300 @@
+---
+# Определяю версию Opatch, для того, чтобы не устанавливать если нужная версия уже установлена.
+- shell: env
+  register: env_result
+
+- debug: var=env_result.stdout_lines
+
+- debug: var=oracle_home
+  
+- name: Opatch version {{ oracle_version }}
+  shell: opatch version 
+  register: opatch_version
+  changed_when: False
+  
+- set_fact: opatch_version="{{ opatch_version.stdout | regex_search('[\.\d]+') }}"
+
+  # Если текущая версия опатча меньше версии указанной в структуре opatch, то сперва сделать бэкап
+  # OPatch и скопировать необходимую версию.(Такая последовательность описано в readme для opatch)
+  #Start OPatch block  
+- block:
+    
+  - name: Backup OPatch directory
+    synchronize:
+      recursive: yes
+      delete: yes
+      src: "{{ oracle_home }}/OPatch"
+      dest: "{{ oracle_home }}/OPatch.{{ opatch_version }}"
+      use_ssh_args: yes
+    delegate_to : "{{ ansible_host | default(inventory_hostname) }}"
+
+  - name: Extract OPatch directory
+    unarchive:
+      remote_src: yes
+      src: "{{ homes[oracle_home]['opatch']['filename'] }}"
+      dest: "{{ oracle_home }}"
+      owner: "{{ oracle_user }}"
+      group: "{{ oracle_group }}"
+      
+  when: opatch_version | version_compare(homes[oracle_home]['opatch']['version'],'<') #version_compare(opatch[oracle_version]['version'],'<')
+  # End OPatch block
+
+  #ocm.rsp нужен для silent установки патчей
+- name: Copy ocm.rsp for {{ oracle_version }} {{ oracle_home }}
+  synchronize:
+    src: "ocm.rsp"
+    dest: "{{ patch_dir }}/{{ oracle_version }}"
+    recursive: yes
+    use_ssh_args: yes
+  changed_when: false
+
+  #Проверка конфликтов патчей
+- name: Check conflicts for patches {{ oracle_version }} {{ oracle_home }}
+  shell: "opatch prereq CheckConflictAgainstOHWithDetail -phBaseDir {{ item }}"
+  args:
+    executable: /bin/bash
+  register: opatch_conflicts
+  with_items: "{{ patch_install | json_query('*[].localpath') }}" 
+
+# Остановить листенеры и БД если переменная shutdown_db=True
+- block:
+
+  - name: Get listener state {{ oracle_version }}
+    shell: "ps -ef | grep -v grep | grep -iw {{ item }}"
+    with_items: "{{ homes[oracle_home]['listener_list'] }}"
+    failed_when: false
+    changed_when: false
+    register: listeners_state
+    
+  - name: Stop extlist listener {{ oracle_version }}
+    vars:
+      list_name: "{{ item.item }}"
+    command: "lsnrctl stop {{ list_name }}"
+    become: true
+    become_user: "{{ extlist_user }}"
+    become_method: sudo
+    become_flags: '-E'
+    when: (list_name | regex_search('(?i)extlist')) and item.rc == 0 
+    with_items: "{{ listeners_state.results }}"
+    loop_control:
+      label: "{{ list_name }}"
+    
+  - name: Stop other listeners {{ oracle_version }}
+    vars:
+      list_name: "{{ item.item }}"
+    shell: "lsnrctl stop {{ list_name }}"
+    when: not (list_name | regex_search('(?i)extlist')) and  item.rc == 0
+    with_items: "{{ listeners_state.results }}"
+    loop_control:
+      label: "{{ list_name }}"
+      
+  - name: Get db state {{ oracle_version }}
+    shell: "ps -ef | grep -v grep | grep -iw ora_pmon_{{ item['sid'] }}"
+    when: item['homepath'] == oracle_home
+    with_items: "{{ db }}"
+    failed_when: false
+    changed_when: false
+    register: db_state
+
+  - name: Shutdown db (async) {{ oracle_version }} {{ oracle_home }}
+    oracle_db:
+      sid: "{{ item.item['sid'] }}"
+      cmd: "shutdown"
+      mode: "immediate"
+    async: 1200
+    poll: 0
+    vars:
+      ansible_python_interpreter: /u/dba/venv/python_dba/bin/python
+    when: item.rc is defined and item.rc == 0
+    with_items: "{{ db_state.results }}"
+    register: db_shut
+
+  - name: Shutdown db (wait) {{ oracle_version }} {{ oracle_home }}
+    async_status:
+      jid: "{{ item.ansible_job_id }}"
+    register: job_result
+    until: job_result.finished
+    retries: 120
+    delay: 5
+    # Условие необходимо, чтобы исключить результаты, которые были skipped в шаге с async
+    when: not item | skipped # item.ansible_job_id is defined
+    with_items: "{{ db_shut.results }}"
+    
+  when: shutdown_db
+
+#Для того, чтобы успешно установился патч 19215058(исправляет параллельность datapatch) необходимо заменить
+# права на qopiprep.bat https://bftman.ftc.ru/issues/273#change-926
+- name: Change permission for qopiprep.bat
+  file:
+    path: "{{ oracle_home }}/QOpatch/qopiprep.bat"
+    mode: 0754
+  when: oracle_version | version_compare('12','>')
+    
+- name: Apply patches {{ oracle_version }}
+  shell: "opatch apply -silent -force -ocmrf {{ patch_dir }}/{{ oracle_version }}/ocm.rsp {{ item }}"
+  args:
+    executable: /bin/bash
+  when: item != ""
+  register: patches_apply
+  with_items:
+    - "{{ (patch_install | json_query('psu[].localpath')) }}"
+    - "{{ (patch_install | json_query('jvm[].localpath')) }}"
+    - "{{ (patch_install | json_query('interim[].localpath')) }}"
+    - "{{ (patch_install | json_query('dst[].localpath')) }}"
+    
+#Запустить БД, если на предыдущих шагах они выключались. Если переменная shutdown_db: True,
+# то значит БД и листенеры выключались на предыдущем шаге и их надо запустить.
+#Start BLOCK_1
+- block:
+    
+  - name:  Primary and adg db open (async) {{ oracle_version }} {{ oracle_home }}
+    oracle_db:
+      sid: "{{ item['sid'] }}"
+      cmd: "startup"
+      mode: "open"
+    async: 1200
+    poll: 0
+    vars:
+      ansible_python_interpreter: /u/dba/venv/python_dba/bin/python
+    when: (item['dbrole'] == "prim" or item['dbrole'] == "adg") and
+          (item['homepath'] == oracle_home))
+    with_items: "{{ db }}"
+    register: db_open
+
+  - name: Primary and adg db (wait) {{ oracle_version }} {{ oracle_home }}
+    async_status:
+        jid: "{{ item.ansible_job_id }}"
+    register: job_result
+    until: job_result.finished
+    retries: 120
+    delay: 5
+    # Условие необходимо, чтобы исключить результаты, которые были skipped в шаге с async
+    when: not item | skipped #item.ansible_job_id is defined
+    with_items: "{{ db_open.results }}"
+
+  - name: Standby db mount (async) {{ oracle_version }} {{ oracle_home }}
+    oracle_db:
+      sid: "{{ item['sid'] }}"
+      cmd: "startup"
+      mode: "open"
+    async: 1200
+    poll: 0
+    vars:
+      ansible_python_interpreter: /u/dba/venv/python_dba/bin/python
+    when: (item['dbrole'] == "stdb") and
+          (item['homepath'] == oracle_home ))
+    with_items: "{{ db }}"
+    register: db_mount
+
+  - name: Primary and adg db (wait) {{ oracle_version }} {{ oracle_home }}
+    async_status:
+      jid: "{{ item.ansible_job_id }}"
+    register: job_result
+    until: job_result.finished
+    retries: 120
+    delay: 5
+    # Условие необходимо, чтобы исключить результаты, которые были skipped в шаге с async
+    when: not item | skipped #item.ansible_job_id is defined
+    with_items: "{{ db_mount.results }}"
+    
+  # Запускать datapatch или catbundle если устанавливался psu или jvm.
+  # Чтобы запустить datapatch принудительно нужно задать datapatch_execute: True. Но данная переменная не влияет на запуск в данном
+  # блоке, поскольку datapatch при установке jvm или psu обязателен к запуску. 
+  - block:
+    # Запуск datapatch или catbundle в зависимости от версии Oracle
+    # datapatch для версии Oracle > 12
+    # Catbundle для версии Oracle < 12
+    - name: Run Catbundle only for version upper 12 (async) {{ oracle_version }} {{ oracle_home }}
+      shell: "export ORACLE_SID={{ item['sid'] }} ; sqlplus / as sysdba @catbundle.sql psu apply"
+      args:      
+        chdir: "{{ oracle_home }}/rdbms/admin"
+      register: catbundle
+      when: (item['short_version'] | version_compare(12,'<')) and
+            (item['homepath'] == oracle_home)
+      with_items: "{{ db }}"
+    
+    - name: Run Catbundle only for version lower 12 (wait) {{ oracle_version }} {{ oracle_home }}
+      async_status: jid="{{ item.ansible_job_id }}"
+      register: job_result
+      until: job_result.finished
+      retries: 60
+      delay: 10
+      when: item.ansible_job_id is defined 
+      with_items: "{{ catbundle.results }}"
+    
+    - name: Load Modified SQL Files into the Database (async) Only for version > 12(async) {{ oracle_version }} {{ oracle_home }}
+      shell: "export ORACLE_SID={{ item['sid'] }}; {{ oracle_home }}/OPatch/datapatch -verbose"
+      async: 3600
+      poll: 0
+      register: datapatch
+      when: (item['short_version'] | version_compare('12','>')) and
+            (item['homepath'] == oracle_home)
+      with_items: "{{ db }}"
+
+    - name: 12.1 - Load Modified SQL Files into the Database (wait) {{ oracle_version }} {{ oracle_home }}
+      async_status: jid="{{ item.ansible_job_id }}"
+      register: job_result
+      until: job_result.finished
+      retries: 60
+      delay: 10
+      when: item.ansible_job_id is defined 
+      with_items: "{{ datapatch.results }}"
+
+    # После выполнения datapatch задать явно переменную datapatch_execute: False чтобы не запускать datapatch далее.
+    - set_fact:
+        datapatch_execute: False
+      
+    when: (patch_install | json_query('psu[].localpath')) or (patch_install | json_query('jvm[].localpath'))
+  
+  when: shutdown_db
+#END BLOCK_1
+
+#Start BLOCK_2. Запуск datapatch при установленной переменной datapatch_execute: True
+- block:
+    
+  - name: Load Modified SQL Files into the Database (async) Only for version > 12(async) {{ oracle_version }} {{ oracle_home }}
+    shell: "export ORACLE_SID={{ item['sid'] }}; {{ oracle_home }}/OPatch/datapatch -verbose"
+    async: 3600
+    poll: 0
+    register: datapatch
+    when: (item['short_version'] | version_compare('12','>')) and
+          (item['homepath'] == oracle_home)
+    with_items: "{{ db }}"
+
+  - name: 12.1 - Load Modified SQL Files into the Database (wait) {{ oracle_version }} {{ oracle_home }}
+    async_status: jid="{{ item.ansible_job_id }}"
+    register: job_result
+    until: job_result.finished
+    retries: 60
+    delay: 10
+    when: item.ansible_job_id is defined 
+    with_items: "{{ datapatch.results }}"
+
+  when: datapatch_execute 
+  
+- name: Start extlist listener for {{ oracle_version }}
+  command: "lsnrctl start {{ item }}"
+  become: true
+  become_user: "{{ extlist_user }}"
+  become_method: sudo
+  become_flags: '-E'
+  when: item | regex_search('(?i)extlist') and shutdown_db
+  with_items: "{{ homes[oracle_home]['listener_list'] }}"
+  loop_control:
+      label: "{{ item }}"
+  
+- name: Start other listeners for {{ oracle_version }} {{ oracle_home }}
+  shell: "lsnrctl start {{ item }}"
+  when: not item | regex_search('(?i)extlist') and shutdown_db
+  with_items: "{{ homes[oracle_home]['listener_list'] }}"
+  loop_control:
+      label: "{{ item }}"
+  
+- name: Check opatch lsinventory for {{ oracle_version }} {{ oracle_home }}
+  shell: "opatch lspatches"
+  args:
+    executable: /bin/bash
+  register: opatchls
+  changed_when: false
+
+- debug: var=opatchls.stdout_lines
