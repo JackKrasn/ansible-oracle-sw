@@ -1,0 +1,4 @@
+---
+dependencies:
+  - { role: get_ora_inventory }
+  - { role: limit_homes }

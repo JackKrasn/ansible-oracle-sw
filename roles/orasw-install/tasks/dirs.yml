@@ -1,0 +1,14 @@
+---
+- name: Create destination dirs for installation {{ oracle_version }}
+  file:
+    dest: "{{ item.path }}"
+    mode: "{{ item.mode | default('0755') }}"
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_group }}"
+    state: directory
+  with_items:
+    - { path: "{{ oracle_sw_source_local }}" }
+    - { path: "{{ oracle_rsp_dir }}" }
+    - { path: "{{ oracle_sw_source_local }}/{{ oracle_version }}" }
+    - { path: "{{ oracle_home }}" }
+    - { path: "{{ inventory_loc }}", mode: '0770' }

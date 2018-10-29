@@ -1,0 +1,14 @@
+---
+- name: Generate response files for {{ oracle_version }}
+  template:
+    src: "sw-install.rsp.{{ oracle_version }}.j2"
+    dest: "{{ oracle_rsp_dir }}/dbca-{{ oracle_version }}.rsp"
+
+- name: Install Oracle Database Server {{ oracle_version }}
+  shell: "{{ oracle_sw_source_local }}/{{ oracle_version }}/database/runInstaller -responseFile {{ oracle_rsp_dir }}/dbca-{{ oracle_version }}.rsp -ignorePrereq -ignoreSysPrereqs -silent -waitforcompletion"
+  register: oraswinstall
+
+- debug: var=oraswinstall.stdout_lines
+
+- name: Run post-install scripts
+  include_tasks: post_install.yml

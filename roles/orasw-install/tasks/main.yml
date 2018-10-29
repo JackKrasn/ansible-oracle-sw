@@ -1,0 +1,105 @@
+---
+- name: include common db variables
+  include_vars:
+    file: ../../vars/common_db_vars_all.yml
+
+- name: Check if DB-server is already installed
+  shell: perl -ne 'exit 1 if m#^<HOME.+\sLOC=\x22{{ item.value.oracle_home }}\x22(?!.+REMOVED)#' {{ inventory_loc }}/ContentsXML/inventory.xml
+  with_dict: "{{ homes }}"
+  tags:
+    - checkifdbinstall
+  register: checkdbswinstall
+  failed_when: false
+  changed_when: false
+
+# checkdbswinstall.results содержит список, полученный на итерациях в шаге с "register: checkdbswinstall".
+# Элементы списка - словари, в каждом есть ключ item, содержащий значение для каждой итерации 'with_dict: "{{ homes }}"'
+# Выполняется nested loop со сравнением значений (версии оракла),
+# в котором в каждый элемент словаря homes добавляется новый атрибут installed со значением результата опроса inventory.xml.
+- set_fact:
+    homes: "{{ homes | combine({item.1:{'installed':item.0.rc}}, recursive=True) }}"
+  when: item.1 == item.0.item.key
+  with_nested:
+    - "{{ checkdbswinstall.results }}"
+    - "{{ homes }}"
+  changed_when: false
+  tags:
+    - checkifdbinstall
+
+- debug: var=homes
+    
+- name: Create directories for distrib
+  include_tasks: dirs.yml
+  vars:
+    oracle_version: "{{ outer_item.key }}"
+    oracle_home: "{{ outer_item.value.oracle_home }}"
+  when: outer_item.value.installed != 1
+  loop_control:
+    loop_var: outer_item
+  with_dict: "{{ homes }}"
+  changed_when: false
+  tags:
+    - swdirs
+
+# Модуль unarchive не поддерживает async выполнение.
+# Используется shell
+- name: Extract files to distrib directory (async)
+  # unarchive:
+  #   src: "{{ item.1 }}"
+  #   dest: "{{ oracle_sw_source_local }}/{{ item.0.version }}"
+  #   remote_src: yes
+  shell: "unzip -u {{ item.1 }} -d {{ oracle_sw_source_local }}/{{ item.0.version }}"
+  # creates не используется (закоментировано), т.к. используется ключ -u в unzip
+  # args:
+  #   creates: "{{ oracle_sw_source_local }}/{{ item.0.version }}/database/runInstaller"
+  async: 1200
+  poll: 0
+  when: item.0.version in homes and homes[item.0.version].installed != 1
+  with_subelements:
+    - "{{ sw_images }}"
+    - "{{ sys_arch }}"
+    - skip_missing: yes
+  register: extract_result
+  loop_control:
+    label: "{{ item.1 }}"
+
+- name: Extract files to distrib directory (wait)
+  async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  retries: 120
+  delay: 10
+  # Условие необходимо, чтобы исключить результаты, которые были skipped в шаге с async
+  # when: item.ansible_job_id is defined
+  when: not item | skipped
+  with_items: "{{ extract_result.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  
+- name: Create admin directory
+  file:
+    dest: "{{ oracle_base }}/admin"
+    mode: 0775
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_group }}"
+    state: directory
+  changed_when: false
+
+- name: Install oracle software
+  include_tasks: install_sw.yml
+  vars:
+    oracle_version: "{{ outer_item.key }}"
+    oracle_home: "{{ outer_item.value.oracle_home }}"  
+  environment:
+    ORACLE_BASE: "{{ oracle_base }}"
+  when: outer_item.value.installed != 1
+  with_dict: "{{ homes }}"
+  loop_control:
+    loop_var: outer_item
+    label: "{{ oracle_home }}"
+    
+- name: Remove distr directory
+  file:
+    path: "{{ oracle_sw_source_local }}"
+    state: absent

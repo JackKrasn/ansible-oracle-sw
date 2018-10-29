@@ -1,0 +1,14 @@
+---
+- name: Sync sqlnet files
+  include_tasks: sync_sqlnet.yml
+  vars:
+    oracle_version: "{{ outer_item.value.version }}"
+    short_version: "{{ oracle_version | replace('.','') }}"
+    lis_port: "{{ outer_item.value.lis_port }}"
+    lis_port_res: "{{ outer_item.value.lis_port_res }}"
+    oracle_home: "{{ outer_item.key }}"
+  loop_control:
+    loop_var: outer_item
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+  with_dict: "{{ homes }}"

@@ -1,0 +1,50 @@
+---
+######## Static info for oracle versions #########
+static_home_info:
+  12.2.0.1:
+    lis_port: 1522
+    lis_port_res: 1523
+    combo_patch: 12.2.0.1.171017
+  12.1.0.2:
+    lis_port: 1548
+    lis_port_res: 1549
+    combo_patch: 12.1.0.2.171017
+  12.1.0.2j7:
+    lis_port: 15480
+    lis_port_res: 15490
+    combo_patch: 12.1.0.2.171017
+  12.1.0.2se:
+    lis_port: 1538
+    lis_port_res: 1539
+  11.2.0.4:
+    lis_port: 1544
+    lis_port_res: 1545
+    combo_patch: 11.2.0.4.170718
+  11.2.0.4se:
+    lis_port: 1534
+    lis_port_res: 1535
+
+
+######## Get DB instances info from CMDB #########
+#bs_obj: http://bftops.ftc.ru/bs-obj/bs-obj_db_all
+bs_obj: http://bftops.ftc.ru/bs-obj/bs-obj_db_all_test
+
+db: >
+  {%- set tmp_l = [] -%}
+  {%- for line in lookup('url', bs_obj, split_lines=False).split('\n')|list -%}
+  {%- set tmp_d = {} -%}
+  {%- for key, value in ['server', 'version', 'sid', 'name', 'sla', 'dbrole', 'multitenant', 'owner', 'app', 'containIn_db', 'contains_db', 'maintenance']|zip(line.split(':')) -%}
+  {%- do tmp_d.update( {key: value} ) -%}
+  {%- endfor -%}
+  {%- set short_version = tmp_d.get('version')|regex_replace('(?i)^(\\d+\\.\\d+\\.\\d+\\.\\d+)\\.\\d+((?:SE|j7)?)', '\\1\\2')|lower -%}
+  {%- do tmp_d.update( {'short_version': short_version} ) -%}
+  {%- do tmp_l.append( tmp_d ) -%}
+  {%- endfor -%}
+  {{ tmp_l | selectattr("server", "equalto", ansible_hostname) | list }}
+
+  
+#apply_only_version ограничивает homes. Т.е. здесь указыаются версии, которые будут выбраны из структуры homes, для которых будет применена роль
+# Можно переопределить в extra vars.
+apply_only_versions: []
+# в данном списке указываются прямо хоумы для которых необходимо применить роли. Ограничивает структуру homes  
+apply_only_homepaths: []

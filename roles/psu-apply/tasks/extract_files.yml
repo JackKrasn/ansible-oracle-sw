@@ -1,0 +1,32 @@
+---
+- stat:
+    path: "{{ patch_dir }}/{{ oracle_version }}"
+  register: p
+  
+- name: Create patch directory
+  file:
+    path: "{{ patch_dir }}/{{ oracle_version }}"
+    state: directory
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_group }}"
+  when: not (p.stat.isdir is defined and p.stat.isdir)
+ 
+- name: Extract patches (async) for {{ oracle_version }}
+  shell: "unzip -o -u '{{ item }}' -d  {{ patch_dir}}/{{ oracle_version }}"
+  #shell: "unzip '{{ item }}' -d  {{ patch_dir}}/{{ oracle_version }}"
+  async: 1200
+  poll: 0
+  with_items: "{{ patch_install | json_query('*[].filename')}}"
+  register: extract_result
+
+- name: Extract patches to patch directory (wait)
+  async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  retries: 120
+  delay: 5
+  # Условие необходимо, чтобы исключить результаты, которые были skipped в шаге с async
+  when: not item | skipped # item.ansible_job_id is defined
+  with_items: "{{ extract_result.results }}"
+  

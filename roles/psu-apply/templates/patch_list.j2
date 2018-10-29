@@ -1,0 +1,5 @@
+{% for i in patch_install[combo_patch] %}
+{% if i != combo_patchid %}
+{{ patch_dir }}/{{ oracle_version }}/{{ i }}
+{% endif %}
+{% endfor %}

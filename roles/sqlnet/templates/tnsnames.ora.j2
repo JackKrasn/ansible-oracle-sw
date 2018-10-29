@@ -1,0 +1,39 @@
+# {{ ansible_managed }}
+   
+ORALIST{{ short_version }} =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = {{ ansible_fqdn }})(PORT = {{ lis_port  }}))
+    )
+  )
+
+ORALIST{{ short_version }}N =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = {{ ansible_fqdn }})(PORT = {{ lis_port_res }}))
+    )
+  )
+
+MGW_AGENT =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROCMGW{{ short_version }}))
+    )
+    (CONNECT_DATA =
+      (SID = mgwextproc{{ short_version }})
+      (PRESENTATION = RO)
+    )
+  )
+
+EXTPROC_CONNECTION_DATA =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC{{ short_version }}))
+    )
+    (CONNECT_DATA =
+      (SID = PLSExtProc{{ short_version }})
+      (PRESENTATION = RO)
+    )
+  )
+
+{% include inventory_hostname + '/tnsnames.ora.ext.' + short_version  + '.j2' ignore missing %}

@@ -1,0 +1,47 @@
+---
+  - name: Check if DB-server is already installed
+    shell: grep "{{ oracle_home_db }}" "{{ inventory_loc }}/ContentsXML/inventory.xml" | wc -l
+    with_items: "{{ oracle_databases }}"
+    tags:
+      - checkifdbinstall
+    register: checkdbswinstall
+
+  - debug: var=checkdbswinstall
+    tags:
+      - checkifdbinstall
+
+  - name: Create distrib directory (base)
+    file: dest={{ oracle_sw_source_local }} mode=775 owner={{ oracle_user }} group={{ oracle_group }} state=directory
+    tags:
+      - distrdirs
+      
+  - name: Create distrib directory (version specific)
+    file: dest={{ oracle_sw_source_local }}/{{ item.0.oracle_version_db }}{{ item.0.oracle_edition|lower }} mode=755 owner={{ oracle_user }} group={{ oracle_group }} state=directory 
+    with_together:
+      - "{{ oracle_databases }}"
+      - "{{ checkdbswinstall.results }}"
+    when: item.1.stdout != "1"
+    tags:
+      - distrdirs
+      
+  - name: Extract file to distrib
+    unarchive: src={{ item.0.dirloc }}/{{ item.0.filename }}  dest={{ oracle_sw_source_local }}/{{ item.1.oracle_version_db }}{{ item.1.oracle_edition|lower }} copy=no
+    with_nested:
+      - "{{ oracle_sw_image_db }}"
+      - "{{ oracle_databases }}"
+    when: item[0].version == item[1].oracle_version_db and item[0].edition == item[1].oracle_edition and checkdbswinstall.results|map(attribute='')
+    tags:
+        - oradbswunpack
+        
+  - name: Create  admin directory
+    file: dest={{ oracle_base }}/admin mode=775 owner={{ oracle_user }} group={{ oracle_group }} state=directory
+    tags:
+      - dbdirs
+
+  - name: Create ORACLE_HOME directory
+    file: dest={{ oracle_home_db }} mode=775 owner={{ oracle_user }} group={{ oracle_group }} state=directory
+    with_items:
+      - "{{ oracle_databases }}"
+    tags:
+      - dbdirs
+

@@ -1,0 +1,12 @@
+---
+# homes_path_override:
+apply_only_homepaths:
+   - /u/app/oracle/product/12.1.0.2/dbhome_2
+
+datapatch_execute: True
+shutdown_db: True
+install_only_version:
+  - 12.1.0.2
+  #- 12.2.0.1
+#apply_only_versions:
+#  - 12.1.0.2

@@ -1,0 +1,8 @@
+*~
+#*#
+*.pyc
+__pycache__
+*.retry
+*.ctl
+*.dfb
+*.dfb[0-9]*

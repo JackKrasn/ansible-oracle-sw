@@ -1,0 +1,6 @@
+---
+# В БД для статической регистрации попадают только stdb и adg, расположенные на хосте по информации из CMDB
+db_for_static: "{{ db | json_query(\"[?
+( (dbrole=='stdb' || dbrole=='adg') && short_version=='\" + oracle_version + \"' ) ||
+( dbrole=='prim' && short_version=='\" + oracle_version + \"' && contains_db )
+].sid\") }}"

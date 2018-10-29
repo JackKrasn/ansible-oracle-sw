@@ -1,0 +1,18 @@
+---
+system: "{{ (ansible_system == 'SunOS') | ternary('Solaris',ansible_system) }}"
+architecture: "{{ ('sun' in ansible_architecture) | ternary('sparc64', (system == 'Solaris' and ansible_architecture == 'i386') | ternary('x86_64', ansible_architecture) ) }}"
+sys_arch: "{{ system }}_{{ architecture }}"
+extlist_user: ibs
+oracle_user: oracle
+oracle_user_home: "/u/app/{{ oracle_user }}"
+oracle_group: oinstall
+dba_group: dba
+oratab: >
+  {%- if ansible_system == 'SunOS' -%}
+  /var/opt/oracle/oratab
+  {%- else -%}
+  /etc/oratab
+  {%- endif -%}
+inventory_loc: /u/app/oraInventory
+oracle_base: /u/app/oracle
+dba_scripts: /u/dba

@@ -1,0 +1,224 @@
+---
+- name: include common db variables
+  include_vars:
+    file: ../../vars/common_db_vars_all.yml
+
+- name: include common db variables for any update operations
+  include_vars:
+    file: ../../vars/common_db_vars_update.yml
+    
+- slurp:
+    src: "{{ [inventory_loc, 'ContentsXML', 'inventory.xml'] | join('/') }}"
+  register: inventory_xml_content
+
+- local_action:
+    module: xml
+    xmlstring: "{{ inventory_xml_content['content'] | b64decode }}"
+    content: attribute
+    xpath: /INVENTORY/HOME_LIST/HOME[not(@REMOVED="T") and not(starts-with(@NAME,"agent"))]
+  register: raw_inventory
+
+- set_fact:
+    raw_homes: "{{ raw_inventory.matches | json_query('[].HOME.LOC') }}"
+
+- name: Get lsinventory xml content
+  shell: |
+    set -e
+    TMP_INV=$(mktemp -u TMP_INV_XXXXXXX.xml)
+    {{ homepath }}/OPatch/opatch lsinventory -xml $TMP_INV >/dev/null
+    cat $TMP_INV
+    rm -f $TMP_INV
+  with_items: "{{ raw_homes }}"
+  loop_control:
+    loop_var: homepath
+  register: lsinventory_xml_content
+  changed_when: false
+
+- local_action:
+    module: xml
+    xmlstring: "{{ lsinventory_xml.stdout }}"
+    content: text
+    xpath: "{{ xpath_for_many_versions | join('|') }}"
+  vars:
+    # Различные выражения xpath для разных версий oracle/OPatch - генерируют разные xml
+    # Выражения будут объединены '|' (OR) при формировании запроса
+    xpath_for_many_versions:
+      - /InventoryInstance/components/component[@id="oracle.server"]/version
+      - /INVENTORY/HOST/HOME/COMPS/COMP[@INT_NAME="oracle.server"]/VERSION
+  with_items: "{{ lsinventory_xml_content.results }}"
+  loop_control:
+    loop_var: lsinventory_xml
+    label: "{{ lsinventory_xml.homepath }}"
+  register: raw_versions
+
+- slurp:
+    src: "{{ [homepath, 'inventory', 'globalvariables', 'oracle.server', 'globalvariables.xml'] | join('/') }}"
+  with_items: "{{ raw_homes }}"
+  loop_control:
+    loop_var: homepath
+  register: globalvariables_xml_content
+
+- local_action:
+    module: xml
+    xmlstring: "{{ globalvariables_xml['content'] | b64decode }}"
+    content: attribute
+    xpath: /GLOBALVARS/VAR[@NAME="oracle_install_db_InstallType"]
+  with_items: "{{ globalvariables_xml_content.results }}"
+  loop_control:
+    loop_var: globalvariables_xml
+    label: "{{ globalvariables_xml.homepath }}"
+  register: edition
+
+# Поскольку структура homes была изменена и после выполнения роли orasw-install
+# структура в старом формате, ее нужно обнулить, чтобы заполнить заново
+- name: Define home
+  set_fact:
+    homes: "{{ {} }}" 
+
+- set_fact:
+    homes: "{{ homes | default({}) | combine( { item.0.lsinventory_xml.homepath: content } ) }}"
+  vars:
+    # Получение версии из matches
+    # json_query нужен, т.к. matches содержит список словарей, в которых ключ,
+    # содержащий версию, может быть 'version' или 'VERSION'.
+    # Далее с помощью split/join оставляется только первые 4 числа версии, разделенные '.'
+    oracle_version: "{{ (item.0.matches[0] | json_query('* | [0]')).split('.')[:4] | join('.') }}"
+    # Получение редакции из matches
+    # Редакция должна быть равна пустой строке в случае EE (правилo, определенное только в нашей инфраструктуре)
+    oracle_edition: "{{ (item.1.matches[0].VAR.VALUE == 'SE') | ternary('se', '') }}"
+    # HOME 12.1.0.2 может использоваться jdk7 вместо jdk6. Используется грязный хак, предполагается, что
+    # в названии хоумов содержится суффикс j7
+    java_version: "{{ (item.0.lsinventory_xml.homepath.split('/')[-2].split('.')[-1] == 'j7') | ternary('j7','') }}"
+    # Число после 'dbhome' в пути
+    home_num: "{{ item.0.lsinventory_xml.homepath.split('/')[-1].split('_')[-1] }}"
+    # Это версия без '.' и с добавлением редакции и версии java
+    legacy_base_sid: "o{{ oracle_version.replace('.', '') }}{{ oracle_edition }}{{ java_version }}"
+    # Еще добавляется '_N',
+    # где N - номер в имени директории 'dbhome_N' из homepath
+    base_sid: "{{ legacy_base_sid }}_{{ home_num }}"
+    oratab_line: "{{ base_sid}}:{{ item.0.lsinventory_xml.homepath }}:N"
+    content:
+      version: "{{ oracle_version }}{{ oracle_edition }}{{ java_version }}"
+      base_sid: "{{ base_sid }}"
+      legacy_base_sid: "{{ legacy_base_sid }}"
+      home_num: "{{ home_num }}"
+      oratab_line: "{{ oratab_line }}"
+  with_together:
+    - "{{ raw_versions.results }}"
+    - "{{ edition.results }}"
+  loop_control:
+    label: "{{ item.0.lsinventory_xml.homepath }}"
+
+- name: Find spfile
+  vars:
+    sid: "{{ item['sid'] }}"
+  find:
+     paths: "{{ homes.keys() | map('regex_replace', '$', '/dbs') | list }}"
+     patterns: "(?:spfile|init){{ sid }}\\.ora$"
+     use_regex: yes
+     recurse: no
+  register: find_spfiles
+  with_items:
+    - "{{ db }}"
+    
+# Если spfile или pfile для одной и той же БД расположены одновременно в разных хоумах, то будет ошибка.
+# Так наличие  spfile и pfile в одном и том же хоуме одновремнно тоже приведет к ошибке.
+- fail:
+    msg: "Spfile for {{ sid }} found {{ item.matched }} times (must be found once)"
+  vars:
+    sid: "{{ item.item.sid }}"
+  when: item.matched != 1
+  with_items: "{{ find_spfiles.results }}"
+  loop_control:
+    label: "{{ item.item.name }}" 
+
+- name: Set homepath and oratab_line for databases in db     
+  set_fact:
+    db: >-
+      {%- do db[item.0].update( { 'homepath': homepath } ) -%}
+      {%- do db[item.0].update( { 'oratab_line': [sid, homepath, 'N'] | join(':') } ) -%}
+      {{ db }}
+  vars:
+    homepath: "{{ ( find_spfiles.results[item.0].files | json_query('[].path | [0]') ).split('/dbs')[0] }}"
+    sid: "{{ db[item.0].sid }}"
+  with_indexed_items:
+    - "{{ db }}"
+
+## Tasks for add addtional legacy line to oratab_lines for each versions but only for oracle home with min home_num
+    
+- name: Convert homes dictictionary to list of dictionaries
+  set_fact:
+    homes_list: "{{ ( homes_list | default([]) ) + [ {'key': item.key, 'value': item.value} ] }}"
+  with_dict: "{{ homes }}"
+
+- set_fact:
+    homes: "{{ homes | combine( {min_home_key: homes[min_home_key] | combine( {'oratab_line': oratab_line} ) } ) }}"
+  vars:
+    min_by_home_num_jmespath_expr: "min_by([?value.version=='{{ item }}'], &to_number(value.home_num)).key"
+    min_home_key: "{{ homes_list | json_query(min_by_home_num_jmespath_expr) }}"
+    oratab_line: "{{ homes[min_home_key]['oratab_line'] }}\n{{ homes[min_home_key]['legacy_base_sid'] }}:{{ min_home_key }}:N"
+  with_items: "{{ homes | json_query('*.version') | unique }}"
+
+
+# find listener.ora. Т.е. исчем хоумы где сконфигурированы листенеры
+- name: Find listener.ora 
+  find:
+    paths: "{{ item.key }}/network/admin"
+    patterns: "listener.ora"
+  register: find_list
+  with_dict: "{{ homes }}"
+  loop_control:
+    label: "{{ item.key }}"
+    
+- name: Slurp listener.ora
+  slurp:
+    src: "{{ item.files[0].path }}"
+  register: listener_ora
+  when: item.matched == 1  
+  with_items: "{{ find_list.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+    
+# # Добавить ключ content со значением пустой строки, если шаг, в котором регистрируется listener_ora был пропущен
+# - set_fact:
+#     listener_ora: "{{ listener_ora | combine( { listener_ora:  {'content': ''} ) }}"
+#   when: listener_ora | skipped  #"'skipped' in listener_ora"
+#   with_items: "{{ listener_ora.results }}"
+
+
+# - debug: var=homes
+# - debug: var=
+
+# Формируется список с названием листенеров, который получается из файла listener.ora (все сконфигурированные листенеры)
+- set_fact:
+    homes: "{{homes | combine( { oracle_home: homes[oracle_home] | combine({'listener_list': listener_list}) } ) }}"
+  vars:
+    oracle_home: "{{ item['_ansible_item_label'] }}"
+    listener_list: "{{ item['content'] | b64decode | regex_findall('(?:^|\\n)\\s*(?<!(?:#|\\(|\\)))([\\w\\.]+)(?=\\s*=\\s*\\(\\s*(?!SID_LIST))') }}"
+  when: item is not skipped
+  with_items: "{{ listener_ora.results }}"
+  loop_control:
+    label: "{{ oracle_home }}"
+    
+# Позже поправить. Если для хоума не нашлось файла listener.ora , то значит для него нужно заполниь пустой список.
+# поскольку item['content'] не существует для skipped хоумов пришлось городить отдельный tasks
+- set_fact:
+    homes: "{{homes | combine( { oracle_home: homes[oracle_home] | combine({'listener_list': [] }) } ) }}"
+  vars:
+    oracle_home: "{{ item['_ansible_item_label'] }}"
+  when: item is skipped
+  with_items: "{{ listener_ora.results }}"
+  loop_control:
+    label: "{{ oracle_home }}"
+
+# Объединяется текущая структура home с static_home_info
+
+- name: Merge homes and static_home_info
+  set_fact:
+    homes: "{{ homes | combine ( {item.key: homes[item.key] | combine( { 'combo_patch':combo_patch,'lis_port':lis_port,'lis_port_res':lis_port_res } ) } ) }}"
+  vars:
+    oracle_version: "{{ item.value.version }}"
+    combo_patch: "{{ static_home_info[oracle_version]['combo_patch'] | default('') }}"
+    lis_port: "{{ static_home_info[oracle_version]['lis_port'] }}"
+    lis_port_res: "{{ static_home_info[oracle_version]['lis_port_res'] }}"
+  with_dict: "{{ homes }}"

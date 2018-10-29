@@ -1,0 +1,8 @@
+---
+- name: oratab
+  remote_user: root
+  template:
+    src: oratab.j2
+    dest: /etc/oratab
+    backup: no
+    force: yes

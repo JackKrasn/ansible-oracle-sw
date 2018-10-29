@@ -1,0 +1,11 @@
+---
+- name: Copy dbca templates 
+  copy:
+    src: "{{ item.value.version }}/"
+    dest: "{{ item.key }}/assistants/dbca/templates"
+    owner: oracle
+    group: oinstall
+    mode: 0644
+  when: (item.value.version == "12.1.0.2") or 
+        (item.value.version == "12.2.0.1")
+  loop: "{{ homes | dict2items }}"

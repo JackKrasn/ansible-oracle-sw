@@ -1,0 +1,167 @@
+---
+- name: Get installed patches
+  shell: "{{ item.key }}/OPatch/opatch lspatches"
+  with_dict: "{{ homes }}"
+  register: lspatches
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: false
+    
+- name: Save info about installed patches into existing homes dictionary
+  set_fact:
+    homes: >-
+      {%- for oh in homes -%}
+          {%- set patches_jmespath_query = "results[?item.key=='" + oh + "'].stdout | [0]" -%}
+          {%- set patches_list = lspatches | json_query(patches_jmespath_query) | regex_findall('\\d+(?=;)') -%}
+          {%- do homes[oh].update( {'patches_list': patches_list} ) -%}
+      {%- endfor -%}
+      {{ homes }} 
+
+- name: Append opatch struct based to opatch_all to homes dictionary
+  set_fact:
+    homes: >-
+      {%- for oh in homes -%}
+          {%- set oracle_version = homes[oh]['version'] -%}
+          {%- do homes[oh].update( { 'opatch': {
+          'version': opatch_all[oracle_version]['version'],
+          'filename': opatch_all[oracle_version]['filename'][sys_arch],
+          'localpath': [oh, 'OPatch'] | join('/')
+          } } ) -%}
+      {%- endfor -%}
+      {{ homes }}
+
+- name: Save info about filenames of needed patches into existing homes dictionary
+  set_fact:
+    homes: >-
+      {%- for oh in homes -%}
+          {%- set oracle_version = homes[oh]['version'] -%}
+          {#- COMBOOOOOOOOOO! -#}
+          {%- do homes[oh].update( {'patch_install': {} } ) -%}
+          {%- if homes[oh]['combo_patch'] -%}
+              {%- set needed_combo = combo[oracle_version][ homes[oh]['combo_patch'] ] -%}
+              {%- if needed_combo['psu'] in homes[oh]['patches_list'] -%}
+                  {%- do needed_combo.pop('psu') -%}
+              {%- endif -%}
+              {%- if needed_combo['jvm'] in homes[oh]['patches_list'] -%}
+                  {%- do needed_combo.pop('jvm') -%}
+              {%- endif -%}
+              {%- if needed_combo['filename'][sys_arch] is defined -%}
+                  {%- if 'psu' in needed_combo or 'jvm' in needed_combo -%}
+                      {#- Значение 'combo' в 'patch_install' будет списком с одним элементом. -#}
+                      {#- Сделано для однообразия, т.к. остальные значения в 'patch_install' - списки с множеством элементов. -#}
+                      {#- Это упростит обработку этой структуры данных. -#}
+                      {%- do homes[oh]['patch_install'].update( {
+                      'combo': [ needed_combo | combine( {
+                      'filename': needed_combo['filename'][sys_arch],
+                      'version': homes[oh]['combo_patch']
+                      } ) ]
+                      } ) -%}
+                  {%- endif -%}
+                  {#- PSUUUUUUUUUUUU! -#}
+                  {%- if 'psu' in needed_combo -%}
+                      {#- Значение 'psu' в 'patch_install' будет списком с одним элементом. -#}
+                      {#- По той же причине, что и 'combo' -#}
+                      {%- set needed_psu = [ {
+                      'localpath': [ patch_dir, oracle_version, needed_combo['patchid'], needed_combo['psu'] ] | join('/'),
+                      'patchid': needed_combo['psu']
+                      } ] -%}
+                      {%- do homes[oh]['patch_install'].update( {'psu': needed_psu} ) -%}
+                  {%- endif -%}
+                  {#- JVM! -#}
+                  {%- if 'jvm' in needed_combo -%}
+                      {#- Значение 'jvm' в 'patch_install' будет списком с одним элементом. -#}
+                      {#- По той же причине, что и 'combo' -#}
+                      {%- set needed_jvm = [ {
+                      'localpath': [ patch_dir, oracle_version, needed_combo['patchid'], needed_combo['jvm'] ] | join('/'),
+                      'patchid': needed_combo['jvm']
+                      } ] -%}
+                      {%- do homes[oh]['patch_install'].update( {'jvm': needed_jvm} ) -%}
+                  {%- endif -%}
+              {%- endif -%}
+          {%- endif -%}
+          {#- INTEEEEEEEERIM! -#}
+          {%- set needed_interim = [] -%}
+          {%- if interim[oracle_version] is defined -%}
+            {%- for interim_id in interim[oracle_version] -%}
+              {%- if not interim_id|string in homes[oh]['patches_list'] -%}
+                  {%- if 'accepted_only_for_combo' in interim[oracle_version][interim_id] -%}
+                      {%- if homes[oh]['combo_patch'] %}
+                        {%- if homes[oh]['combo_patch'] in interim[oracle_version][interim_id]['accepted_only_for_combo'] and
+                          interim[oracle_version][interim_id]['filename'][sys_arch] is defined -%}
+                          {%- do needed_interim.append( {
+                          'filename': interim[oracle_version][interim_id]['filename'][sys_arch],
+                          'patchid': interim_id|string,
+                          'localpath': [ patch_dir, oracle_version, interim_id|string ] | join('/')
+                          } ) -%}
+                        {%- endif -%}
+                      {%- endif -%}  
+                  {%- else -%}
+                        {%- if interim[oracle_version][interim_id]['filename'][sys_arch] is defined -%}
+                          {%- do needed_interim.append( {
+                          'filename': interim[oracle_version][interim_id]['filename'],
+                          'patchid': interim_id|string,
+                          'localpath': [ patch_dir, oracle_version, interim_id|string ] | join('/')
+                          } ) -%}
+                      {%- endif -%}
+                  {%- endif -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endif -%}  
+          {%- if needed_interim -%}
+              {%- do homes[oh]['patch_install'].update( {'interim': needed_interim} ) -%}
+          {%- endif -%}
+          {#- DST! -#}
+          {%- set needed_dst = [] %}
+          {%- for dst_id in dst -%}
+              {%- if not dst_id|string in homes[oh]['patches_list'] -%}
+                  {%- if oracle_version in dst[dst_id] -%}
+                      {%- if sys_arch in dst[dst_id][oracle_version] -%}
+                          {%- do needed_dst.append( {
+                          'filename': dst[dst_id][oracle_version][sys_arch],
+                          'patchid': dst_id|string,
+                          'localpath': [ patch_dir, oracle_version, dst_id|string ] | join('/')
+                          } ) -%}
+                      {%- endif -%}
+                  {%- endif -%}
+              {%- endif -%}
+          {%- endfor -%}
+          {%- if needed_dst -%}
+              {%- do homes[oh]['patch_install'].update( {'dst': needed_dst} ) -%}
+          {%- endif -%}
+          {#- END -#}
+      {%- endfor -%}
+      {{ homes }}
+
+
+- debug: var=homes
+  
+- name: Extract patches
+  include_tasks: extract_files.yml
+  vars:
+    oracle_version: "{{ outer_item.value.version }}"
+    patch_install: "{{ outer_item.value.patch_install }}"
+  when: outer_item.value.patch_install
+  with_dict: "{{ homes }}"
+  loop_control:
+    loop_var: outer_item
+   
+- name: Apply Patches
+  include_tasks: "install.yml"
+  vars:
+    oracle_version: "{{ outer_item.value.version }}"
+    patch_install: "{{ outer_item.value.patch_install }}"
+    oracle_home: "{{ outer_item.key }}"
+  loop_control:
+    loop_var: outer_item
+    label: "{{ oracle_home }}"
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    PATH: "{{ ansible_env.PATH }}:{{ oracle_home }}/OPatch:{{ oracle_home }}/bin"
+  when: outer_item.value.patch_install
+  with_dict: "{{ homes }}"
+
+- name: Remove patch directory
+  file:
+    path: "{{ patch_dir }}"
+    state: absent    
+

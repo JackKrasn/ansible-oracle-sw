@@ -1,0 +1,249 @@
+---
+patch_dir: "/u/app/oracle/patch"
+nfs_patch_path: /net/oraclenas/distrib/Oracle/02_Patches
+# Останавливать листенеры и все БД, при накате патчей.
+shutdown_db: True
+# Для версии Oracle > 12 при накате некоторых  патчей может потребоваться запуск datapatch
+# по умолчанию False, т.е. не запускать datapatch. Если же в процессе применения роли будут ставиться
+# psu или jvm, то данная переменная не повлияет на запуск datapatch и все равно будет запущен.
+# Подразумевается, что по умолчанию не требуется, чтобы после установки interim или dst патчей запускался datapatch
+datapatch_execute: False
+######patches#######
+combo:
+  12.2.0.1:
+    12.2.0.1.171017:
+      patchid: "26636004"
+      psu: "26710464"
+      jvm: "26635944"
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/Database/LINUX.x86.64/12.2.0.1/p26636004 COMBO OF OJVM RU COMPONENT 12.2.0.1.171017 + DBRU 12.2.0.1.171017/p26636004_122010_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/Database/SOLARIS.SPARC.64/12.2.0.1/p26636004 COMBO OF OJVM RU COMPONENT 12.2.0.1.171017 + DBRU 12.2.0.1.171017/p26636004_122010_SOLARIS64.zip"
+  12.1.0.2:
+    12.1.0.2.171017:
+      patchid: "26636270"
+      psu: "26713565"
+      jvm: "26635845"
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/Database/LINUX.x86.64/12.1.0.2/COMBO OF OJVM COMPONENT 12.1.0.2.171017 DBPSU + DBPSU 12.1.0.2.171017/p26636270_121020_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/Database/SOLARIS.SPARC.64/12.1.0.2/COMBO OF OJVM COMPONENT 12.1.0.2.171017 DBPSU + DBPSU 12.1.0.2.171017/p26636270_121020_SOLARIS64.zip"
+    12.1.0.2.170718:
+      patchid: "25901056"
+      psu: "25755742"
+      jvm: "26027162"
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Linux.x86_64/p25901056_121020_Linux-x86-64.zip"
+        Solaris_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Solaris.sparc64/p25901056_121020_SOLARIS64.zip"
+    12.1.0.2.170117:
+      patchid: "24917069"
+      psu: "24732082"
+      jvm: "24917972"
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Linux.x86_64/p24917069_121020_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/Database/SOLARIS.SPARC.64/12.1.0.2/COMBO OF OJVM COMPONENT 12.1.0.2.170117 DBPSU + DBPSU 12.1.0.2.170117 (Patch)/p24917069_121020_SOLARIS64.zip"
+        Solaris_x86_64: "{{ nfs_patch_path }}/Database/SOLARIS.x86.64/12.1.0.2/COMBO OF OJVM COMPONENT 12.1.0.2.170117 DBPSU + DBPSU 12.1.0.2.170117 (Patch)/p24917069_121020_Solaris86-64.zip"
+  11.2.0.4:
+    11.2.0.4.170718:
+      patchid: "26031209"
+      psu: "25869727"
+      jvm: "26027154"
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/Database/LINUX.x86.64/11.2.0.4/COMBO OF OJVM COMPONENT 11.2.0.4.170718 DBPSU + DBPSU 11.2.0.4.170718 (Patch)/p26031209_112040_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/Database/SOLARIS.SPARC.64/11.2.0.4/COMBO OF OJVM COMPONENT 11.2.0.4.170718 DBPSU + DBPSU 11.2.0.4.170718 (Patch)/p26031209_112040_SOLARIS64.zip"
+    11.2.0.4.160119:
+      patchid: "22378146"
+      psu: "21948347"
+      jvm: "22139245"
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/Database/LINUX.x86.64/11.2.0.4/COMBO OF OJVM COMPONENT 11.2.0.4.160119 DB PSU + DB PSU 11.2.0.4.160119 (JAN2016)/p22378146_112040_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/Database/SOLARIS.SPARC.64/11.2.0.4/COMBO OF OJVM COMPONENT 11.2.0.4.161019 DBPSU + DBPSU 11.2.0.4.161019 (JAN2016)/p22378146_112040_SOLARIS64.zip"
+        Solaris_x86_64: "{{ nfs_patch_path }}/Database/SOLARIS.x86.64/11.2.0.4/COMBO OF OJVM COMPONENT 11.2.0.4.160119 DB PSU + DB PSU 11.2.0.4.1601 (JAN2016)/p22378146_112040_Solaris86-64.zip"
+
+opatch_all:
+  12.2.0.1:
+    version: 12.2.0.1.11
+    filename:
+      Linux_x86_64: "{{ nfs_patch_path }}/OPatch/12.2.0.1.0/12.2.0.1.11/p6880880_122010_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/OPatch/12.2.0.1.0/12.2.0.1.11/p6880880_122010_SOLARIS64.zip"
+  12.1.0.2:
+    version: 12.1.0.1.10
+    filename:
+      Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Linux.x86_64/p6880880_121010_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Solaris.sparc64/p6880880_121010_SOLARIS64.zip"
+      Solaris_x86_64: "{{ nfs_patch_path }}/OPatch/12.1.0.0.0/12.1.0.1.10/p6880880_121010_Solaris86-64.zip"
+  11.2.0.4:
+    version: 11.2.0.3.12
+    filename:
+      Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/11204EE.Linux.x86_64/p6880880_112000_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/OPatch/11.2.0.0.0/11.2.0.3.12/p6880880_112000_SOLARIS64.zip"
+      Solaris_x86_64: "{{ nfs_patch_path }}/OPatch/11.2.0.0.0/11.2.0.3.12/p6880880_112000_SOLARIS86-64.zip"
+
+interim:
+  12.2.0.1:
+    #EORGIAN CHARACTERS DONOT DISPLAYED CORRECTLY FOR CLOB WITH MYCLOB.GETSUBSTRING
+    26380097:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12201EE.Linux.x86_64/p26380097_122010_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/DBLastPatchComplect/12201EE.Solaris.sparc64/p26380097_122010_SOLARIS64.zip"
+      accepted_only_for_combo:
+        - 12.2.0.1.171017
+  12.1.0.2:
+    #PARALLEL EXECUTION OF DATAPATCH
+    19215058:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/Database/Generic/12.1.0.2/p19215058-HPI_12102_RAC-ORA-12012-FOUND-IN-DB-ALERT-LOG-WHEN-RESTART-ALL-NODES-CRS-STACK/p19215058_121020_Generic.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Solaris.sparc64/p19215058_121020_Generic.zip"
+      accepted_only_for_combo:
+        - 12.1.0.2.171017
+        - 12.1.0.2.170718
+    #MERGE REQUEST ON TOP OF 12.1.0.2.0 FOR BUGS 20687195 21128593
+    21554480:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Linux.x86_64/p21554480_121020_Generic.zip"
+      accepted_only_for_combo:
+        - 12.1.0.2.171017
+        - 12.1.0.2.170718
+    #ORA-39082 WHEN IMPORTING PLSQL OBJECTS
+    20412068:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Linux.x86_64/p20412068_121020_Linux-x86-64.zip"
+      accepted_only_for_combo:
+        - 12.1.0.2.171017
+        - 12.1.0.2.170718
+    #EXTERNAL PROCEDURE LEAKS SOCKET FILES
+    21345478:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Linux.x86_64/p21345478_121020_Linux-x86-64.zip"
+        Solaris_sparc64: "{{ nfs_patch_path }}/DBLastPatchComplect/12102EE.Solaris.sparc64/p21345478_121020_SOLARIS64.zip"
+      accepted_only_for_combo:
+        - 12.1.0.2.171017
+        - 12.1.0.2.170718
+    #USER CAN CHANGE PASSWORD EVEN WITHOUT RESTRICTED PRIVILEGE
+    18500971:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/Database/LINUX.x86.64/12.1.0.2/p18500971 TT12.1.0.2SQLFUZZ2 USER CAN CHANGE PASSWORD EVEN WITHOUT RESTRICTED PRIVILEGE/p18500971_12102171017_Linux-x86-64.zip"
+      accepted_only_for_combo:
+        - 12.1.0.2.171017
+  11.2.0.4:
+    #ORA-39082 WHEN IMPORTING PLSQL OBJECTS
+    20412068:
+      filename:
+        Linux_x86_64: "{{ nfs_patch_path }}/DBLastPatchComplect/11204EE.Linux.x86_64/p20412068_112040_Linux-x86-64.zip"
+      accepted_only_for_combo:
+        - 11.2.0.4.170718
+        - 11.2.0.4.160119
+dst:
+  ########################################################################################################
+  # DST-31
+  27015449:
+    12.2.0.1:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv31/p27015449_122010_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv31/p27015449_122010_SOLARIS64.zip"
+    12.1.0.2:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv31/p27015449_121020_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv31/p27015449_121020_SOLARIS64.zip"
+    11.2.0.4:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv31/p27015449_112040_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv31/p27015449_112040_SOLARIS64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-30
+  #25881255:
+  #  12.2.0.1:
+  #    DSTv30 не ставим, так как на 12.2 у него конфликт с 28 (28 идет по дефолту в установке)
+  #  12.2.0.1:
+  #    Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv30/p25881255_122010_Linux-x86-64.zip"
+  #  12.1.0.2:
+  #    Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv30/p25881255_121020_Linux-x86-64.zip"
+  #    Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv30/p25881255_121020_SOLARIS64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-29
+  #DSTv29 - есть только под Linux и Windows. Под Sparc64 - нет. - устанавливать не надо
+  #25173124:
+  #  12.2.0.1:
+  #    Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv29/p25173124_122010_Linux-x86-64.zip"
+  #  12.1.0.2:
+  #    Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv29/p25173124_121020_Linux-x86-64.zip"
+  #  11.2.0.4:
+  #    Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv29/p25173124_112040_Linux-x86-64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-28
+  24701840:
+  #  12.2.0.1:
+  #    Есть в начальной установке софта
+  #    Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv28/p24701840_122010_Linux-x86-64.zip"
+  #    Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv28/p24701840_122010_SOLARIS64.zip"
+    12.1.0.2:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv28/p24701840_121020_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv28/p24701840_121020_SOLARIS64.zip"
+    11.2.0.4:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv28/p24701840_112040_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv28/p24701840_112040_SOLARIS64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-27
+  23614158:
+  #  12.2.0.1:
+  #    DSTv27 не ставим, так как на 12.2 у него конфликт с 28 (28 идет по дефолту в установке)
+    12.1.0.2:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv27/p23614158_121020_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv27/p23614158_121020_SOLARIS64.zip"
+    11.2.0.4:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv27/p23614158_112040_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv27/p23614158_112040_SOLARIS64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-26
+  22873635:
+  #  12.2.0.1:
+  #    Есть в начальной установке софта
+    12.1.0.2:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv26/p22873635_121020_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv26/p22873635_121020_SOLARIS64.zip"
+    11.2.0.4:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv26/p22873635_112040_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv26/p22873635_112040_SOLARIS64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-25
+  22037014:
+  #  12.2.0.1:
+  #    Есть в начальной установке софта
+    12.1.0.2:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv25/p22037014_121020_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv25/p22037014_121020_SOLARIS64.zip"
+    11.2.0.4:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv25/p22037014_112040_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv25/p22037014_112040_SOLARIS64.zip"
+  #
+  ########################################################################################################
+  #
+  # DST-24
+  #  12.2.0.1:
+  #    Есть в начальной установке софта
+  #  12.1.0.2:
+  #    Не устанавливаем
+  #  11.2.0.4:
+  #    Не устанавливаем
+  #
+  ########################################################################################################
+  #
+  # DST-23
+  19396455:
+  #  12.2.0.1:
+  #    Есть в начальной установке софта
+    12.1.0.2:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv23/p19396455_121020_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv23/p19396455_121020_SOLARIS64.zip"
+    11.2.0.4:
+      Linux_x86_64:    "{{ nfs_patch_path }}/Database/DST/DSTv23/p19396455_112040_Linux-x86-64.zip"
+      Solaris_sparc64: "{{ nfs_patch_path }}/Database/DST/DSTv23/p19396455_112040_SOLARIS64.zip"
+  #
+  ########################################################################################################

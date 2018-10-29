@@ -1,0 +1,20 @@
+---
+- name: Copy glogin.sql for {{ oracle_version }}
+  synchronize:
+    src: "glogin.sql"
+    dest: "{{ oracle_home }}/sqlplus/admin/"
+    use_ssh_args: yes
+
+- name: Run oraInstroot script after installation {{ oracle_version }}
+  remote_user: root
+  shell: "{{ inventory_loc }}/orainstRoot.sh"
+  register: runroot0
+
+- debug: var=runroot0.stdout_lines
+
+- name: Run root script after installation {{ oracle_version }}
+  remote_user: root
+  shell: "{{ oracle_home }}/root.sh"
+  register: runroot1
+  
+- debug: var=runroot1.stdout_lines
